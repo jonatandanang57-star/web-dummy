@@ -411,6 +411,29 @@
         font-size: 15px;
       }
     }
+
+    /* Tema disamakan dengan versi rentan: palet biru, header gradasi, dan panel lembut. */
+    body { background: #f1f5fb; color: #172554; font-family: "Segoe UI", Arial, sans-serif; }
+    .topbar { background: linear-gradient(120deg, #172554, #1e40af); color: #fff; padding: 22px 28px; box-shadow: 0 4px 15px #17255420; }
+    .topbar-inner { max-width: 1200px; }
+    .brand-icon { background: #3b82f6; border-radius: 13px; }
+    .brand h1 { font-size: 25px; }
+    .brand p { color: #dbeafe; font-size: 14px; }
+    .version-pill { color: #166534; background: #f0fdf4; border-color: #bbf7d0; letter-spacing: .3px; }
+    .container { max-width: 1200px; margin: 28px auto; }
+    .intro h2 { color: #172554; }
+    .card { border-radius: 16px; box-shadow: 0 5px 20px #0f172a08; }
+    .card-icon { background: #eff6ff; color: #2563eb; border-radius: 10px; }
+    textarea, select { border-radius: 10px; }
+    button { background: #2563eb; transition: .15s; }
+    button:hover { filter: brightness(.95); transform: translateY(-1px); }
+    button.secondary { background: #eff6ff; color: #1d4ed8; border-color: #dbeafe; }
+    .chat-note { background: linear-gradient(120deg, #eff6ff, #f8fafc); border: 1px solid #dbeafe; }
+    pre { border-radius: 10px; }
+    @media (max-width: 760px) {
+      .topbar { padding: 14px 17px; }
+      .brand h1 { font-size: 20px; }
+    }
   </style>
 </head>
 
@@ -710,6 +733,10 @@
     }
 
     function eksporLog() {
+      if (logs.length === 0) {
+        alert("Jalankan pengujian terlebih dahulu sebelum mengekspor log.");
+        return;
+      }
       const data = {
         app: APP,
         npm: NPM,

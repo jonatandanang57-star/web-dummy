@@ -635,11 +635,12 @@ async function kirimPesan() {
   tambahPesan(hasil.balasan, "bot");
 
   const data = {
+    timestamp: new Date().toISOString(),
     app: "P06-WEB-DUMMY",
     npm: NPM,
     kasus: KASUS,
     versi: VERSI,
-    waktu: new Date().toISOString(),
+    nomor_pengujian: logPengujian.length + 1,
     payload: pesan,
     balasan: hasil.balasan,
     aksi: hasil.aksi
@@ -728,7 +729,9 @@ function eksporLog() {
     npm: NPM,
     kasus: KASUS,
     versi: VERSI,
-    hasil_pengujian: logPengujian
+    diekspor_pada: new Date().toISOString(),
+    jumlah_pengujian: logPengujian.length,
+    entries: logPengujian
   }, null, 2);
 
   const file = new Blob([isi], {
