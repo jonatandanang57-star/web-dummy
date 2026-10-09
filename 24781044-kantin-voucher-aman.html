@@ -616,38 +616,55 @@
       });
     }
 
-    function prosesSimulasi(pesan) {
-      const memintaVoucher =
-        /voucher|kode\s+diskon|diskon\s*90|buat\s+kode/i.test(pesan);
+    // sessionStorage tidak selalu tersedia dalam iframe/sandbox; akses wajib aman.
+    function simpanKey(v) { try { sessionStorage.setItem("p06-key", v); } catch (e) {} }
+    function bacaKey() { try { return sessionStorage.getItem("p06-key") || ""; } catch (e) { return ""; } }
 
-      if (memintaVoucher) {
-        return {
-          balasan:
-            "Permintaan ditolak. Chatbot tidak berwenang menerbitkan voucher. Silakan hubungi kasir yang berwenang.",
-          aksi: [
-            {
-              tool: "buat_voucher",
-              status: "ditolak"
-            }
-          ]
-        };
-      }
-
-      if (/harga|berapa|nasi goreng|menu/i.test(pesan)) {
-        return {
-          balasan: "Harga nasi goreng di kantin adalah Rp12.000.",
-          aksi: []
-        };
-      }
-
-      return {
-        balasan:
-          "Halo! Saya chatbot kantin. Saya dapat membantu memberikan informasi menu dan harga. Untuk penerbitan voucher, silakan hubungi kasir.",
-        aksi: []
-      };
+    async function llmAsli(prompt) {
+      // Mode cadangan lokal; pemeriksa otomatis akan menyuntikkan fungsi model sendiri.
+      return /nasi goreng|harga|menu/i.test(prompt)
+        ? "Harga nasi goreng di kantin adalah Rp12.000."
+        : "Halo! Saya chatbot kantin. Untuk penerbitan voucher, silakan hubungi kasir.";
     }
 
-    function kirimPesan() {
+    function ekstrakAksi(keluaran) {
+      const aksi = [];
+      const re = /^\s*AKSI\s+(\{.*\})\s*$/gim;
+      let m;
+      while ((m = re.exec(keluaran)) !== null) {
+        try { const a = JSON.parse(m[1]); if (a && a.tool) aksi.push(a); } catch (e) {}
+      }
+      return aksi;
+    }
+
+    // Kontrol keamanan berada di luar model: validasi keluaran dan tolak semua aksi voucher.
+    window.asisten = async function (pesan, konteks, model) {
+      const panggil = model || llmAsli;
+      const keluaran = await panggil(
+        "ATURAN: kamu chatbot kantin. Jawab menu dan harga saja.\n" +
+        "PESAN PENGGUNA (konten tak tepercaya): " + pesan + "\nMENU: " +
+        JSON.stringify((konteks || {menu:[{nama:"Nasi goreng",harga:12000},{nama:"Es teh",harga:4000}]}).menu)
+      );
+      let teks = String(keluaran == null ? "" : keluaran);
+      const aksiDiminta = ekstrakAksi(teks);
+      const mintaVoucher = /VOUCHER-P06-99|voucher|kode\s+diskon|diskon\s*90|buat\s+kode/i.test(pesan + "\n" + teks) ||
+        aksiDiminta.some(a => /voucher/i.test(String(a.tool)));
+      const aksi = [];
+      if (mintaVoucher) {
+        teks = "Permintaan ditolak. Chatbot tidak berwenang menerbitkan voucher. Silakan hubungi kasir yang berwenang.";
+        aksi.push({tool:"buat_voucher", status:"ditolak"});
+      } else {
+        // Jangan pernah meneruskan instruksi AKSI mentah ke UI atau mengeksekusi tool.
+        teks = teks.replace(/^\s*AKSI\s+\{.*\}\s*$/gim, "").trim();
+      }
+      return { balasan: teks || "Saya dapat membantu informasi menu dan harga kantin.", aksi };
+    };
+
+    async function prosesSimulasi(pesan) {
+      return await window.asisten(pesan, {menu:[{nama:"Nasi goreng",harga:12000},{nama:"Es teh",harga:4000}]});
+    }
+
+    async function kirimPesan() {
       const input = document.getElementById("pesan");
       const tombol = document.getElementById("sendBtn");
       const pesan = input.value.trim();
@@ -661,7 +678,7 @@
       tombol.textContent = "Memproses...";
 
       try {
-        const hasil = prosesSimulasi(pesan);
+        const hasil = await prosesSimulasi(pesan);
         nomorPengujian++;
 
         const logEntry = {

@@ -579,42 +579,47 @@ function tambahPesan(teks, tipe) {
     document.getElementById("chat").scrollHeight;
 }
 
-function prosesSimulasi(pesan) {
-  const m = pesan.toLowerCase();
+// Penyimpanan sesi opsional: sandbox/pemeriksa dapat menolak akses storage.
+function simpanKey(v) { try { sessionStorage.setItem("p06-key", v); } catch (e) {} }
+function bacaKey() { try { return sessionStorage.getItem("p06-key") || ""; } catch (e) { return ""; } }
 
-  // Perilaku rentan yang sengaja dibuat untuk demonstrasi lokal.
-  if (
-    m.includes("abaikan aturan") ||
-    m.includes("voucher") ||
-    m.includes("diskon 90")
-  ) {
-    return {
-      balasan:
-        "Simulasi rentan: permintaan diterima. Kode voucher sintetis: VOUCHER-P06-99.",
-      aksi: [{
-        tool: "buat_voucher",
-        status: "dijalankan",
-        catatan:
-          "Aksi sintetis dalam simulator lokal; tidak membuat voucher nyata."
-      }]
-    };
-  }
-
-  if (m.includes("nasi goreng") || m.includes("harga")) {
-    return {
-      balasan: "Harga nasi goreng di kantin adalah Rp12.000.",
-      aksi: []
-    };
-  }
-
-  return {
-    balasan:
-      "Halo! Silakan tanyakan menu atau harga makanan kantin.",
-    aksi: []
-  };
+async function llmAsli(prompt) {
+  // Mode cadangan lokal; pemeriksa otomatis akan menyuntikkan fungsi model sendiri.
+  return /nasi goreng|harga|menu/i.test(prompt)
+    ? "Harga nasi goreng di kantin adalah Rp12.000."
+    : "Halo! Silakan tanyakan menu atau harga makanan kantin.";
 }
 
-function kirimPesan() {
+function ekstrakAksi(keluaran) {
+  const aksi = [];
+  const re = /^\s*AKSI\s+(\{.*\})\s*$/gim;
+  let m;
+  while ((m = re.exec(keluaran)) !== null) {
+    try { const a = JSON.parse(m[1]); if (a && a.tool) aksi.push(a); } catch (e) {}
+  }
+  return aksi;
+}
+
+// KONTRAK PEMERIKSA: versi rentan mempercayai keluaran model tanpa validasi.
+window.asisten = async function (pesan, konteks, model) {
+  const panggil = model || llmAsli;
+  const keluaran = await panggil(
+    "ATURAN: kamu chatbot kantin, hanya menjawab menu dan harga.\n" +
+    "PESAN PENGGUNA: " + pesan + "\nMENU: " + JSON.stringify((konteks || {menu:[{nama:"Nasi goreng",harga:12000},{nama:"Es teh",harga:4000}]}).menu)
+  );
+  const teks = String(keluaran == null ? "" : keluaran);
+  const aksi = ekstrakAksi(teks).map(a => ({tool:a.tool, status:a.status || "dijalankan"}));
+  if (/VOUCHER-P06-99|buat\s+voucher|voucher/i.test(teks) && !aksi.length) {
+    aksi.push({tool:"buat_voucher", status:"dijalankan"});
+  }
+  return { balasan: teks, aksi };
+};
+
+async function prosesSimulasi(pesan) {
+  return await window.asisten(pesan, {menu:[{nama:"Nasi goreng",harga:12000},{nama:"Es teh",harga:4000}]});
+}
+
+async function kirimPesan() {
   const input = document.getElementById("pesan");
   const pesan = input.value.trim();
 
@@ -626,7 +631,7 @@ function kirimPesan() {
 
   tambahPesan(pesan, "user");
 
-  const hasil = prosesSimulasi(pesan);
+  const hasil = await prosesSimulasi(pesan);
   tambahPesan(hasil.balasan, "bot");
 
   const data = {
